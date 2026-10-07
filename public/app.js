@@ -35,6 +35,7 @@ async function api(method, url, body, headers = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !url.startsWith('/api/auth/')) { showAuth(); throw new Error(data.error || '로그인이 필요합니다'); }
   if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
   return data;
 }
@@ -333,7 +334,26 @@ async function viewData() {
       h('a', { class: 'primary', href: '/api/export', download: 'plando-diary-export.json' }, h('button', { class: 'primary' }, '전체 내보내기 (JSON)'))),
     h('div', { class: 'card' }, h('h3', {}, '현재 저장된 양'),
       h('ul', {}, [['계획', d.plans.length], ['계획 수정 버전', d.plan_versions.length], ['할 일(삭제 포함)', d.todos.length], ['실행 기록', d.runs.length], ['완료 기록', d.completion_events.length], ['돌아보기', d.reflections.length]].map(([k, v]) => h('li', {}, `${k}: ${v}`)))),
-    h('div', { class: 'card mut' }, '규칙: 날짜는 서울 달력 날짜(YYYY-MM-DD), 시각은 UTC 저장 후 화면에서 서울 시간으로 표시, 시간 길이는 항상 분 단위. 로그인이 없으므로 링크를 아는 사람은 누구나 볼 수 있습니다.'));
+    h('div', { class: 'card mut' }, '규칙: 날짜는 서울 달력 날짜(YYYY-MM-DD), 시각은 UTC 저장 후 화면에서 서울 시간으로 표시, 시간 길이는 항상 분 단위. 내 자료는 내 계정으로 로그인했을 때만 보입니다.'),
+    h('h2', {}, '계정'),
+    h('form', { class: 'card', onsubmit: async (e) => {
+      e.preventDefault();
+      const f = formData(e.target);
+      if (await act(() => api('POST', '/api/account/password', f), '비밀번호를 바꿨습니다. 다른 기기의 로그인은 모두 풀렸습니다')) e.target.reset();
+    } }, h('h3', {}, '비밀번호 바꾸기'),
+      h('div', { class: 'row' },
+        field('현재 비밀번호', h('input', { name: 'current_password', type: 'password', required: true, autocomplete: 'current-password' })),
+        field('새 비밀번호 (10자 이상)', h('input', { name: 'new_password', type: 'password', required: true, minlength: 10, autocomplete: 'new-password' })),
+        h('button', { class: 'small primary' }, '바꾸기'))),
+    h('form', { class: 'card warnbox', onsubmit: async (e) => {
+      e.preventDefault();
+      if (!confirm('계정과 모든 자료(계획·할 일·기록·돌아보기·5일 기록)가 영구히 지워집니다. 계속할까요?')) return;
+      if (await act(() => api('DELETE', '/api/account', formData(e.target)), '계정과 자료를 지웠습니다')) showAuth();
+    } }, h('h3', { class: 'warn' }, '계정 삭제'),
+      h('p', {}, '계정을 지우면 내 계획·할 일·실행 기록·돌아보기·5일 기록이 함께 지워지며 되돌릴 수 없습니다. 지우기 전에 위에서 내보내기를 해 두세요.'),
+      h('div', { class: 'row' },
+        field('비밀번호 확인', h('input', { name: 'password', type: 'password', required: true, autocomplete: 'current-password' })),
+        h('button', { class: 'small danger' }, '계정과 자료 삭제'))));
   void plans;
 }
 
@@ -347,10 +367,135 @@ async function render() {
     else if (path === '/runs') await viewRuns(q);
     else if (path === '/review') await viewReview(q);
     else if (path === '/data') await viewData();
+    else if (path === '/experiment') await viewExperiment();
     else await viewPlans();
   } catch (e) {
     $app.replaceChildren(h('p', { class: 'warn' }, '불러오지 못했습니다: ' + e.message), h('button', { onclick: render }, '다시 시도'));
   }
 }
-addEventListener('hashchange', render);
-render();
+// ---------------- 5일 기록 ----------------
+async function viewExperiment() {
+  const d = await api('GET', '/api/experiment');
+  const exp = d.experiment;
+  const parts = [h('h2', {}, '5일 기록 — 계획 규칙 하나를 바꿔 보기')];
+  if (!exp) {
+    parts.push(h('form', { class: 'card', onsubmit: async (e) => {
+      e.preventDefault();
+      if (!confirm('질문과 처음 계획 규칙은 한 번 정하면 바꿀 수 없습니다. 고정할까요?')) return;
+      if (await act(() => api('POST', '/api/experiment', formData(e.target)), '1일차 질문을 고정했습니다')) render();
+    } }, h('h3', {}, '1일차: 질문 고정'),
+      h('p', { class: 'mut' }, '관찰 지표는 "하루 계획 시간과 실제 시간의 차이(분)" 하나로 정해져 있습니다. 질문과 지금의 계획 규칙을 사람이 읽는 문장으로 한 번만 정하세요.'),
+      field('이 5일 동안 답하려는 질문 한 문장', h('input', { name: 'question', required: true, maxlength: 200, size: 60 })),
+      field('지금 쓰는 계획 규칙 (예: 할 일마다 예상 시간을 처음 느낌대로 잡는다)', h('input', { name: 'initial_plan_rule', required: true, maxlength: 300, size: 60 })),
+      h('button', { class: 'primary' }, '질문 고정')));
+    $app.replaceChildren(...parts);
+    return;
+  }
+  parts.push(h('div', { class: 'card' },
+    h('div', {}, h('b', {}, '질문: '), exp.question),
+    h('div', {}, h('b', {}, '지표: '), `${exp.metric_name} (단위: ${exp.unit})`),
+    h('div', { class: 'mut' }, exp.calc_rule),
+    h('details', {}, h('summary', {}, '계산 규칙(결측·중복·튀는 값·반올림·주 시작)'),
+      h('ul', {}, [exp.missing_rule, exp.duplicate_rule, exp.outlier_rule, exp.rounding_rule, `주 시작 요일: ${exp.week_start}`].map((x) => h('li', {}, x)))),
+    h('div', {}, h('b', {}, '처음 계획 규칙: '), exp.initial_plan_rule),
+    d.rule_change ? h('div', {}, h('b', {}, '바꾼 계획 규칙: '), d.rule_change.new_rule) : null));
+
+  const need = d.days.length;
+  const blocked = need === 2 && !d.rule_change;
+  parts.push(h('form', { class: 'card', onsubmit: async (e) => {
+    e.preventDefault();
+    if (await act(() => api('POST', '/api/experiment/days', formData(e.target)), '오늘 기록을 저장했습니다')) render();
+  } }, h('h3', {}, `오늘 기록 (서울 날짜는 서버가 정합니다 · ${need}/5일 기록됨)`),
+    blocked ? h('p', { class: 'warn' }, '3일차에 들어가기 전에 아래에서 계획 규칙을 하나 바꿔 기록해야 합니다.') : null,
+    h('div', { class: 'row' },
+      field('오늘 계획한 시간(분)', h('input', { name: 'planned_min', type: 'number', min: 0, max: 1440, required: true })),
+      field('오늘 실제로 쓴 시간(분)', h('input', { name: 'actual_min', type: 'number', min: 0, max: 1440, required: true })),
+      field('메모(선택)', h('input', { name: 'note', maxlength: 300, size: 30 })),
+      h('button', { class: 'primary', disabled: blocked }, '저장')),
+    h('p', { class: 'mut' }, '같은 날 다시 저장하면 그날 값이 바뀝니다. 5일이 모두 서로 다른 날이어야 합니다.')));
+
+  if (need === 2 && !d.rule_change) {
+    parts.push(h('form', { class: 'card', onsubmit: async (e) => {
+      e.preventDefault();
+      if (!confirm('계획 규칙은 한 번만 바꿀 수 있습니다. 기록할까요?')) return;
+      if (await act(() => api('POST', '/api/experiment/rule-change', formData(e.target)), '계획 규칙 변경을 기록했습니다')) render();
+    } }, h('h3', {}, '2일차 뒤 · 3일차 앞: 계획 규칙 하나 바꾸기'),
+      field('새 계획 규칙', h('input', { name: 'new_rule', required: true, maxlength: 300, size: 60 })),
+      field('바꾼 이유', h('input', { name: 'reason', required: true, maxlength: 300, size: 60 })),
+      h('button', { class: 'primary' }, '규칙 변경 기록')));
+  }
+  if (d.rule_change) {
+    const rc = d.rule_change;
+    parts.push(h('div', { class: 'card' }, h('h3', {}, '계획 규칙 변경 기록'),
+      h('div', {}, `변경 시각(서울): ${kst(rc.changed_at)}`), h('div', {}, '이전 규칙: ', rc.old_rule), h('div', {}, '새 규칙: ', rc.new_rule),
+      h('div', {}, '이유: ', rc.reason),
+      h('div', { class: 'mut' }, `근거 기록: 1일차(#${rc.after_day1_id}), 2일차(#${rc.after_day2_id}) 뒤에 기록됨`)));
+  }
+
+  parts.push(h('div', { class: 'tablewrap' }, h('table', {},
+    h('thead', {}, h('tr', {}, ['일차', '날짜(서울)', '계획(분)', '실제(분)', '차이(분)', '메모', '저장 시각'].map((x) => h('th', {}, x)))),
+    h('tbody', {}, d.days.length ? d.days.map((x) => h('tr', { id: `day-${x.day_no}` },
+      h('td', {}, `${x.day_no}일차`), h('td', {}, x.date), h('td', {}, x.planned_min), h('td', {}, x.actual_min),
+      h('td', {}, h('b', { class: x.diff_min > 0 ? 'warn' : 'ok' }, `${x.diff_min > 0 ? '+' : ''}${x.diff_min}`), x.outlier ? h('span', { class: 'pill warn' }, ' 튀는 값') : null),
+      h('td', {}, x.note || '—'), h('td', {}, kst(x.updated_at))))
+      : h('tr', {}, h('td', { colspan: 7, class: 'mut' }, '아직 기록이 없습니다'))))));
+  const sm = d.summary;
+  parts.push(h('div', { class: 'card' }, h('h3', {}, '합계·평균 (기록이 있는 날만, 단위: 분)'),
+    h('div', {}, `전체 ${sm.all.days}일 · 차이 합계 ${sm.all.total_diff_min}분 · 평균 ${sm.all.avg_diff_min ?? '—'}분`),
+    h('ul', {}, sm.by_week.map((w) => h('li', {}, `${w.week_start} 시작 주(월요일 기준): ${w.days}일 · 합계 ${w.total_diff_min}분 · 평균 ${w.avg_diff_min}분`)))));
+  if (d.comparison) {
+    const c = d.comparison;
+    parts.push(h('div', { class: 'card' }, h('h3', {}, '규칙 변경 전후 비교 (같은 지표·같은 단위·같은 계산 규칙)'),
+      h('div', { class: 'mut' }, `${c.metric} · 단위 ${c.unit}`),
+      h('div', {}, `변경 전(1~2일차, ${c.before.days}일): 평균 ${c.before.avg_diff_min ?? '—'}분 · 합계 ${c.before.total_diff_min}분 — 규칙: ${c.before.rule}`),
+      h('div', {}, `변경 후(3일차~, ${c.after.days}일): 평균 ${c.after.avg_diff_min ?? '—'}분 · 합계 ${c.after.total_diff_min}분 — 규칙: ${c.after.rule}`)));
+  }
+  $app.replaceChildren(...parts);
+}
+
+// ---------------- 로그인·가입 ----------------
+let me = null;
+function showAuth(msg) {
+  me = null;
+  document.getElementById('nav').classList.add('hide');
+  const bar = document.getElementById('userbar');
+  bar.classList.add('hide'); bar.replaceChildren();
+  let mode = 'login';
+  const box = h('div', { class: 'card auth' });
+  const draw = () => {
+    box.replaceChildren(
+      h('h2', {}, mode === 'login' ? '로그인' : '가입'),
+      h('p', { class: 'mut' }, '내 계획과 기록은 로그인한 나만 볼 수 있습니다.'),
+      msg ? h('p', { class: 'warn', id: 'auth-msg' }, msg) : null,
+      h('div', { class: 'tabs' },
+        h('button', { type: 'button', class: mode === 'login' ? 'on' : '', onclick: () => { mode = 'login'; msg = ''; draw(); } }, '로그인'),
+        h('button', { type: 'button', class: mode === 'register' ? 'on' : '', onclick: () => { mode = 'register'; msg = ''; draw(); } }, '가입')),
+      h('form', { onsubmit: async (e) => {
+        e.preventDefault();
+        try {
+          await api('POST', mode === 'login' ? '/api/auth/login' : '/api/auth/register', formData(e.target));
+          location.hash = '#/plans';
+          await boot();
+        } catch (err) { msg = err.message; draw(); }
+      } },
+      field('이메일', h('input', { name: 'email', type: 'email', required: true, autocomplete: 'username' })),
+      field(mode === 'login' ? '비밀번호' : '비밀번호 (10자 이상)', h('input', { name: 'password', type: 'password', required: true, minlength: mode === 'login' ? undefined : 10, autocomplete: mode === 'login' ? 'current-password' : 'new-password' })),
+      h('button', { class: 'primary' }, mode === 'login' ? '로그인' : '가입하고 시작')));
+  };
+  draw();
+  $app.replaceChildren(box);
+}
+
+async function boot() {
+  try { me = (await api('GET', '/api/me')).user; } catch { return; } // 401 이면 api() 가 로그인 화면을 띄운다
+  document.getElementById('nav').classList.remove('hide');
+  const bar = document.getElementById('userbar');
+  bar.classList.remove('hide');
+  bar.replaceChildren(h('span', {}, me.email), h('button', { class: 'small', onclick: async () => {
+    await act(() => api('POST', '/api/auth/logout', {}));
+    showAuth();
+  } }, '로그아웃'));
+  render();
+}
+addEventListener('hashchange', () => { if (me) render(); });
+boot();

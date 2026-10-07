@@ -1,0 +1,28 @@
+{
+  "$id": "pds-schema-v3",
+  "title": "과제 7 데이터베이스 계약 — v2(과제 6)에 인증·소유자·5일 기록을 더한 것",
+  "extends": "pds-schema-v2",
+  "rules": {
+    "owner": "plans.user_id 와 reflections.user_id 가 주인. todos/runs/completion_events/todo_tags/plan_versions 는 plans 를 거쳐 주인이 정해진다. user_id 가 NULL 인 자료(과제 6 에서 넘어온 것)는 누구에게도 보이지 않으며, LEGACY_OWNER_EMAIL 로 지정한 이메일이 가입·로그인할 때 그 계정으로 옮겨진다.",
+    "password": "password_hash 에는 bcrypt(cost 12) 결과만 저장한다. 원문·복호화 가능한 값은 어디에도 없다.",
+    "session": "쿠키 pds_session 의 값은 무작위 32바이트(base64url). DB 에는 SHA-256 해시만 저장하고 expires_at(7일) 이 지나면 무효. 로그아웃·비밀번호 변경 시 서버에서 행을 지운다. 서명용 비밀키가 없다.",
+    "day": "5일 기록의 날짜는 서버가 정한 오늘(Asia/Seoul)이며 클라이언트가 보낸 날짜는 무시한다."
+  },
+  "new_tables": {
+    "users": { "id": "INTEGER IDENTITY PK", "email": "TEXT UNIQUE, 항상 소문자(CHECK email = lower(email))", "password_hash": "TEXT NOT NULL (bcrypt)", "created_at": "TEXT ts" },
+    "sessions": { "id": "INTEGER IDENTITY PK", "user_id": "FK users.id", "token_hash": "TEXT UNIQUE (SHA-256)", "created_at": "TEXT ts", "expires_at": "TEXT ts" },
+    "experiments": { "id": "PK", "user_id": "FK users.id UNIQUE (계정당 1건, 한 번 만들면 수정 불가)", "question": "TEXT", "metric_name": "TEXT", "unit": "TEXT ('분')", "calc_rule": "TEXT", "missing_rule": "TEXT", "duplicate_rule": "TEXT", "outlier_rule": "TEXT", "rounding_rule": "TEXT", "week_start": "TEXT ('월요일')", "initial_plan_rule": "TEXT", "created_at": "TEXT ts" },
+    "diary_days": { "id": "PK", "user_id": "FK users.id", "day_date": "TEXT date, UNIQUE(user_id, day_date)", "day_no": "INTEGER, UNIQUE(user_id, day_no)", "planned_min": "INTEGER >= 0", "actual_min": "INTEGER >= 0", "note": "TEXT", "created_at": "TEXT ts", "updated_at": "TEXT ts" },
+    "plan_rule_changes": { "id": "PK", "user_id": "FK users.id UNIQUE (한 번만)", "old_rule": "TEXT", "new_rule": "TEXT", "reason": "TEXT", "after_day1_id": "FK diary_days.id", "after_day2_id": "FK diary_days.id", "changed_at": "TEXT ts (서버 시각)" }
+  },
+  "changed_tables": {
+    "plans": "+ user_id INTEGER NULL REFERENCES users(id)",
+    "reflections": "+ user_id INTEGER NULL REFERENCES users(id)",
+    "plan_versions": "추가 전용 트리거는 유지하되, 계정 삭제 트랜잭션이 set_config('pds.account_delete','on') 을 켠 경우에만 DELETE 허용"
+  },
+  "ordering_constraints": [
+    "1일차 질문(experiments)이 없으면 diary_days 저장 거절",
+    "diary_days 가 정확히 2건일 때만 plan_rule_changes 생성 가능, 3번째 날은 규칙 변경이 있어야 저장 가능",
+    "diary_days 는 최대 5건, 같은 서울 날짜 재저장은 그날 행을 갱신"
+  ]
+}

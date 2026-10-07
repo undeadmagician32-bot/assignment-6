@@ -33,3 +33,8 @@ th{color:var(--mut);font-weight:600;font-size:.8rem}
 #toast.show{opacity:1}#toast.err{background:var(--warn);color:#fff}
 .tablewrap{overflow-x:auto}
 pre{white-space:pre-wrap;word-break:break-word}
+
+.userbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin:0 0 6px;font-size:.85rem;color:var(--mut)}
+.auth{max-width:420px;margin:30px auto}.auth form{display:flex;flex-direction:column;gap:10px}
+.auth .tabs{display:flex;gap:6px;margin-bottom:10px}.auth .tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.warnbox{border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin:10px 0}

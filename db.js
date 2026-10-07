@@ -84,7 +84,14 @@ CREATE TABLE IF NOT EXISTS plan_versions (
   UNIQUE (plan_id, version)
 );
 CREATE OR REPLACE FUNCTION plan_versions_append_only() RETURNS trigger AS $$
-BEGIN RAISE EXCEPTION 'plan_versions is append-only'; END;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN RAISE EXCEPTION 'plan_versions is append-only'; END IF;
+  -- 삭제는 계정 삭제 트랜잭션이 pds.account_delete=on 을 켠 경우에만 허용
+  IF coalesce(current_setting('pds.account_delete', true), '') <> 'on' THEN
+    RAISE EXCEPTION 'plan_versions is append-only';
+  END IF;
+  RETURN OLD;
+END;
 $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_plan_versions_no_change ON plan_versions;
 CREATE TRIGGER trg_plan_versions_no_change BEFORE UPDATE OR DELETE ON plan_versions
@@ -142,6 +149,67 @@ CREATE TABLE IF NOT EXISTS reflections (
   improvement TEXT NOT NULL CHECK (length(trim(improvement)) > 0),
   carried_plan_id INTEGER REFERENCES plans(id),
   created_at TEXT NOT NULL
+);
+
+-- ===== 과제 7: 인증 =====
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE CHECK (email = lower(email)),
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+-- 세션 값 원문은 저장하지 않고 SHA-256 해시만 저장한다.
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_sessions_user ON sessions(user_id);
+-- 과제 6 에서 넘어온 자료는 user_id 가 NULL(주인 없음)이며, 주인 없는 자료는 누구에게도 보이지 않는다.
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
+ALTER TABLE reflections ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS ix_plans_user ON plans(user_id);
+
+-- ===== 과제 7: 5일 실험 =====
+CREATE TABLE IF NOT EXISTS experiments (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  question TEXT NOT NULL,
+  metric_name TEXT NOT NULL,
+  unit TEXT NOT NULL,
+  calc_rule TEXT NOT NULL,
+  missing_rule TEXT NOT NULL,
+  duplicate_rule TEXT NOT NULL,
+  outlier_rule TEXT NOT NULL,
+  rounding_rule TEXT NOT NULL,
+  week_start TEXT NOT NULL,
+  initial_plan_rule TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS diary_days (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  day_date TEXT NOT NULL,
+  day_no INTEGER NOT NULL,
+  planned_min INTEGER NOT NULL CHECK (planned_min >= 0),
+  actual_min INTEGER NOT NULL CHECK (actual_min >= 0),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_id, day_date),
+  UNIQUE (user_id, day_no)
+);
+CREATE TABLE IF NOT EXISTS plan_rule_changes (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  old_rule TEXT NOT NULL,
+  new_rule TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  after_day1_id INTEGER NOT NULL REFERENCES diary_days(id),
+  after_day2_id INTEGER NOT NULL REFERENCES diary_days(id),
+  changed_at TEXT NOT NULL
 );
 `;
 
