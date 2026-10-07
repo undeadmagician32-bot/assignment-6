@@ -1,0 +1,12 @@
+{
+  "name": "plando-diary",
+  "version": "1.0.0",
+  "description": "플랜두씨 다이어리 1 — 계획(Plan) → 실제(Do) → 돌아보기(See)",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node test/run.js"
+  }
+}

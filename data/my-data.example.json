@@ -1,0 +1,14 @@
+{
+  "plans": [
+    {
+      "title": "(예시 형식) 내가 지금 하는 일 이름",
+      "period_start": "2026-10-05", "period_end": "2026-10-18",
+      "priority": 1, "success_criteria": "무엇이 되면 성공인지 한 줄", "estimate_min": 600,
+      "todos": [
+        { "title": "할 일 1", "due_date": "2026-10-06", "priority": 1, "tags": "태그1,태그2", "estimate_min": 60,
+          "done": true,
+          "runs": [ { "start": "2026-10-06T20:00", "end": "2026-10-06T21:30", "actual_min": 90, "blocked_reason": "막혔던 이유(없으면 빈 문자열)" } ] }
+      ]
+    }
+  ]
+}

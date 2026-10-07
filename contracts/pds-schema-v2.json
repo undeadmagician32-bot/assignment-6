@@ -1,0 +1,50 @@
+{
+  "$id": "pds-schema-v2",
+  "title": "플랜두씨 다이어리 최종 데이터베이스 계약 (SQLite)",
+  "rules": {
+    "date": "마감일·기간은 서울 기준 달력 날짜 TEXT 'YYYY-MM-DD'. 시간대 변환 없음.",
+    "timestamp": "시각은 UTC ISO-8601 TEXT (예: 2026-10-07T01:30:00.000Z). 화면에서 Asia/Seoul로 바꿔 보여 줌.",
+    "overdue": "status<>'done' AND due_date IS NOT NULL AND due_date < 오늘(Asia/Seoul). 완료한 할 일은 지연으로 세지 않음.",
+    "duration_unit": "모든 시간 길이는 정수 '분'(*_min). 저장·집계·표시 모두 같은 단위.",
+    "priority": "1=높음, 2=보통, 3=낮음. 정렬은 숫자 오름차순.",
+    "delete": "할 일은 deleted_at 으로 지우며 모든 집계·목록에서 제외."
+  },
+  "tables": {
+    "plans": {
+      "columns": { "id": "INTEGER PK", "title": "TEXT NOT NULL", "period_start": "TEXT date NOT NULL", "period_end": "TEXT date NOT NULL (>= period_start)", "priority": "INTEGER 1..3", "success_criteria": "TEXT NOT NULL", "estimate_min": "INTEGER >= 0", "carried_from_reflection_id": "INTEGER NULL, UNIQUE when not null", "created_at": "TEXT ts", "updated_at": "TEXT ts" },
+      "note": "현재 값. 계획 ID는 수정해도 바뀌지 않음."
+    },
+    "plan_versions": {
+      "columns": { "id": "INTEGER PK", "plan_id": "FK plans.id", "version": "INTEGER (UNIQUE with plan_id)", "title": "TEXT", "period_start": "TEXT date", "period_end": "TEXT date", "priority": "INTEGER", "success_criteria": "TEXT", "estimate_min": "INTEGER", "saved_at": "TEXT ts" },
+      "note": "추가 전용(UPDATE/DELETE 트리거로 차단). version=1 이 처음 세운 계획."
+    },
+    "todos": {
+      "columns": { "id": "INTEGER PK", "plan_id": "FK plans.id", "title": "TEXT NOT NULL", "due_date": "TEXT date NULL", "priority": "INTEGER 1..3", "estimate_min": "INTEGER >= 0", "status": "'open'|'done'", "completed_at": "TEXT ts NULL", "deleted_at": "TEXT ts NULL", "created_at": "TEXT ts", "updated_at": "TEXT ts" }
+    },
+    "todo_tags": { "columns": { "todo_id": "FK todos.id", "tag": "TEXT" }, "primary_key": ["todo_id", "tag"] },
+    "runs": {
+      "columns": { "id": "INTEGER PK", "todo_id": "FK todos.id", "started_at": "TEXT ts", "ended_at": "TEXT ts (>= started_at)", "actual_min": "INTEGER >= 0", "blocked_reason": "TEXT ('' 이면 막힘 아님)", "idempotency_key": "TEXT UNIQUE NULL", "created_at": "TEXT ts" },
+      "note": "계획(todos)과 별도 표라서 저장해도 계획 값을 덮어쓰지 않음."
+    },
+    "completion_events": {
+      "columns": { "id": "INTEGER PK", "todo_id": "FK todos.id", "idempotency_key": "TEXT UNIQUE NOT NULL", "completed_at": "TEXT ts", "reopened_at": "TEXT ts NULL" },
+      "constraints": ["UNIQUE(idempotency_key): 같은 요청은 한 번만", "UNIQUE(todo_id) WHERE reopened_at IS NULL: 한 할 일의 유효한 완료는 한 건만 (버튼 잠금과 무관한 DB 제약)"]
+    },
+    "reflections": {
+      "columns": { "id": "INTEGER PK", "scope_plan_id": "FK plans.id NULL", "period_from": "TEXT date NULL", "period_to": "TEXT date NULL", "summary": "TEXT", "improvement": "TEXT NOT NULL (다음 계획으로 넘길 한 줄)", "carried_plan_id": "FK plans.id NULL", "created_at": "TEXT ts" }
+    }
+  },
+  "relations": [
+    "plans 1—N plan_versions", "plans 1—N todos", "todos 1—N todo_tags", "todos 1—N runs", "todos 1—N completion_events",
+    "reflections 1—0..1 plans (carried_plan_id ↔ plans.carried_from_reflection_id)"
+  ],
+  "review_definitions": {
+    "planned": "대상 계획에 딸린 deleted_at IS NULL 인 할 일 수",
+    "done": "그중 status='done'",
+    "overdue": "그중 위 지연 규칙에 해당",
+    "blocked": "그중 trim(runs.blocked_reason)<>'' 인 실행 기록이 하나라도 있는 할 일",
+    "expected_min": "대상 할 일의 estimate_min 합",
+    "actual_min": "대상 할 일의 runs.actual_min 합",
+    "diff_min": "actual_min - expected_min (없으면 모두 0)"
+  }
+}

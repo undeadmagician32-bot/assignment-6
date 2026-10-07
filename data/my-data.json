@@ -1,0 +1,8 @@
+{"plans":[{"title":"10/7~10/11 ALEPH·취업 준비·학습 주간","period_start":"2026-10-07","period_end":"2026-10-11","priority":1,
+"success_criteria":"10/11까지 다섯 가지 할 일을 각자 정한 완료 조건대로 끝낸다","estimate_min":3180,
+"todos":[
+{"title":"ALEPH 과제 7까지 승인 (1일차 인증)","due_date":"2026-10-08","priority":1,"tags":"ALEPH","estimate_min":600},
+{"title":"SKT 적성검사 풀기 (완료 창 뜨면 성공)","due_date":"2026-10-09","priority":1,"tags":"취업","estimate_min":180},
+{"title":"현직자 특강 정리·작성 후 메일 전송","due_date":"2026-10-10","priority":2,"tags":"취업,글쓰기","estimate_min":300},
+{"title":"웹 서버 구축 및 보안 취약점 정리·재구축 연습","due_date":"2026-10-11","priority":2,"tags":"공부,보안","estimate_min":900},
+{"title":"빌린 철학책 읽고 정리","due_date":"2026-10-11","priority":3,"tags":"독서","estimate_min":1200}]}]}
