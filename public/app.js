@@ -19,6 +19,9 @@ function h(tag, props = {}, ...kids) {
   return el;
 }
 
+// null·배열을 글자로 찍지 않도록 걸러서 넣는다.
+function put(el, ...kids) { el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false)); }
+
 let toastTimer;
 function toast(msg, err = false) {
   const t = document.getElementById('toast');
@@ -91,7 +94,7 @@ async function viewPlans() {
     h('button', { class: 'primary' }, '계획 저장'));
 
   const list = plans.map((p) => planCard(p));
-  $app.replaceChildren(h('h2', {}, '계획'), form, plans.length ? list : h('p', { class: 'mut' }, '아직 계획이 없습니다.'));
+  put($app, h('h2', {}, '계획'), form, ...(plans.length ? list : [h('p', { class: 'mut' }, '아직 계획이 없습니다.')]));
 }
 
 function planCard(p) {
@@ -121,7 +124,7 @@ function planCard(p) {
 
   async function loadHist() {
     const { versions } = await api('GET', `/api/plans/${p.id}/versions`);
-    hist.replaceChildren(h('div', { class: 'tablewrap' }, h('table', {},
+    put(hist, h('div', { class: 'tablewrap' }, h('table', {},
       h('thead', {}, h('tr', {}, ['버전', '저장 시각(서울)', '이름', '기간', '우선순위', '성공 기준', '예상'].map((x) => h('th', {}, x)))),
       h('tbody', {}, versions.map((v) => h('tr', {},
         h('td', {}, v.version === 1 ? 'v1 (처음 계획)' : `v${v.version}`), h('td', {}, kst(v.saved_at)), h('td', {}, v.title),
@@ -178,7 +181,7 @@ async function viewTodos(q) {
 
   const body = h('tbody', {});
   for (const t of list.todos) body.append(...todoRows(t));
-  $app.replaceChildren(h('h2', {}, '할 일'), filter, addForm,
+  put($app, h('h2', {}, '할 일'), filter, addForm,
     h('div', { class: 'tablewrap' }, h('table', {},
       h('thead', {}, h('tr', {}, ['#', '할 일', '계획', '마감', '우선순위', '태그', '예상', '실제', '상태', ''].map((x) => h('th', {}, x)))), body)),
     list.todos.length ? null : h('p', { class: 'mut' }, '조건에 맞는 할 일이 없습니다.'));
@@ -221,7 +224,7 @@ async function loadDetail(t, row) {
   const now = new Date();
   const start = kstInput(new Date(now - 30 * 60000).toISOString());
   const end = kstInput(now.toISOString());
-  box.replaceChildren(
+  put(box, 
     h('h3', {}, `#${todo.id} ${todo.title} — 계획 값 (예상 ${fmtMin(todo.estimate_min)}, 마감 ${todo.due_date || '없음'})`),
     h('p', { class: 'mut' }, `완료 기록 ${completions.length}건 (현재 유효 ${todo.active_completions}건) · 실행 기록은 별도 표에 저장되어 위의 계획 값을 바꾸지 않습니다.`),
     h('div', { class: 'tablewrap' }, h('table', {},
@@ -258,7 +261,7 @@ async function doubleClickTest(t, box) {
 // ---------------- 실행 기록 ----------------
 async function viewRuns(q) {
   const { runs } = await api('GET', '/api/runs?' + new URLSearchParams(q));
-  $app.replaceChildren(h('h2', {}, '실행 기록'),
+  put($app, h('h2', {}, '실행 기록'),
     h('p', { class: 'mut' }, `각 기록은 해당 할 일에 이어져 있습니다. 합계: ${fmtMin(runs.reduce((s, r) => s + r.actual_min, 0))} · ${runs.length}건`),
     h('div', { class: 'tablewrap' }, h('table', {},
       h('thead', {}, h('tr', {}, ['기록 #', '할 일', '시작(서울)', '끝(서울)', '실제 시간', '막힌 이유'].map((x) => h('th', {}, x)))),
@@ -319,16 +322,16 @@ async function viewReview(q) {
         field('종료일', h('input', { name: 'period_end', type: 'date', required: true })),
         h('button', { class: 'primary small' }, '다음 계획으로 넘기기'))));
 
-  $app.replaceChildren(h('h2', {}, '돌아보기'), filter, stats,
+  put($app, h('h2', {}, '돌아보기'), filter, stats,
     h('p', { class: 'mut' }, '숫자를 누르면 그 숫자가 나온 할 일·기록 목록으로 이동합니다. 대상 계획: ',
       r.plans_in_scope.length ? r.plans_in_scope.map((p) => h('a', { href: `#/todos?plan_id=${p.id}` }, `#${p.id} ${p.title} `)) : '없음'),
-    refForm, h('h3', {}, '남긴 돌아보기'), refList.length ? refList : h('p', { class: 'mut' }, '아직 없습니다.'));
+    refForm, h('h3', {}, '남긴 돌아보기'), ...(refList.length ? refList : [h('p', { class: 'mut' }, '아직 없습니다.')]));
 }
 
 // ---------------- 내 자료 ----------------
 async function viewData() {
   const [d, plans] = await Promise.all([api('GET', '/api/export'), api('GET', '/api/plans')]);
-  $app.replaceChildren(h('h2', {}, '내 자료'),
+  put($app, h('h2', {}, '내 자료'),
     h('div', { class: 'card' },
       h('p', {}, '계획·할 일·실행 기록·돌아보기 전체를 JSON 파일 하나로 내려받습니다. 서버 데이터베이스 내용 그대로입니다.'),
       h('a', { class: 'primary', href: '/api/export', download: 'plando-diary-export.json' }, h('button', { class: 'primary' }, '전체 내보내기 (JSON)'))),
@@ -370,7 +373,7 @@ async function render() {
     else if (path === '/experiment') await viewExperiment();
     else await viewPlans();
   } catch (e) {
-    $app.replaceChildren(h('p', { class: 'warn' }, '불러오지 못했습니다: ' + e.message), h('button', { onclick: render }, '다시 시도'));
+    put($app, h('p', { class: 'warn' }, '불러오지 못했습니다: ' + e.message), h('button', { onclick: render }, '다시 시도'));
   }
 }
 // ---------------- 5일 기록 ----------------
@@ -388,7 +391,7 @@ async function viewExperiment() {
       field('이 5일 동안 답하려는 질문 한 문장', h('input', { name: 'question', required: true, maxlength: 200, size: 60 })),
       field('지금 쓰는 계획 규칙 (예: 할 일마다 예상 시간을 처음 느낌대로 잡는다)', h('input', { name: 'initial_plan_rule', required: true, maxlength: 300, size: 60 })),
       h('button', { class: 'primary' }, '질문 고정')));
-    $app.replaceChildren(...parts);
+    put($app, parts);
     return;
   }
   parts.push(h('div', { class: 'card' },
@@ -450,7 +453,7 @@ async function viewExperiment() {
       h('div', {}, `변경 전(1~2일차, ${c.before.days}일): 평균 ${c.before.avg_diff_min ?? '—'}분 · 합계 ${c.before.total_diff_min}분 — 규칙: ${c.before.rule}`),
       h('div', {}, `변경 후(3일차~, ${c.after.days}일): 평균 ${c.after.avg_diff_min ?? '—'}분 · 합계 ${c.after.total_diff_min}분 — 규칙: ${c.after.rule}`)));
   }
-  $app.replaceChildren(...parts);
+  put($app, parts);
 }
 
 // ---------------- 로그인·가입 ----------------
@@ -459,11 +462,11 @@ function showAuth(msg) {
   me = null;
   document.getElementById('nav').classList.add('hide');
   const bar = document.getElementById('userbar');
-  bar.classList.add('hide'); bar.replaceChildren();
+  bar.classList.add('hide'); put(bar);
   let mode = 'login';
   const box = h('div', { class: 'card auth' });
   const draw = () => {
-    box.replaceChildren(
+    put(box, 
       h('h2', {}, mode === 'login' ? '로그인' : '가입'),
       h('p', { class: 'mut' }, '내 계획과 기록은 로그인한 나만 볼 수 있습니다.'),
       msg ? h('p', { class: 'warn', id: 'auth-msg' }, msg) : null,
@@ -483,7 +486,7 @@ function showAuth(msg) {
       h('button', { class: 'primary' }, mode === 'login' ? '로그인' : '가입하고 시작')));
   };
   draw();
-  $app.replaceChildren(box);
+  put($app, box);
 }
 
 async function boot() {
@@ -491,7 +494,7 @@ async function boot() {
   document.getElementById('nav').classList.remove('hide');
   const bar = document.getElementById('userbar');
   bar.classList.remove('hide');
-  bar.replaceChildren(h('span', {}, me.email), h('button', { class: 'small', onclick: async () => {
+  put(bar, h('span', {}, me.email), h('button', { class: 'small', onclick: async () => {
     await act(() => api('POST', '/api/auth/logout', {}));
     showAuth();
   } }, '로그아웃'));
