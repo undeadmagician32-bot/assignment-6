@@ -1,4 +1,4 @@
-// 로컬 개발·일반 호스트용 서버. Vercel 에서는 api/index.js 가 같은 로직을 함수로 돌린다.
+// 로컬 개발·일반 호스트용 서버. Vercel 에서는(이 파일은 자동 인식을 피하려고 local-server.js 로 이름 지음) api/index.js 가 같은 로직을 함수로 돌린다.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';

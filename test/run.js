@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pds-'));
 process.env.PGLITE_DIR = 'memory://';
-const { server } = await import('../server.js');
+const { server } = await import('../local-server.js');
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
 

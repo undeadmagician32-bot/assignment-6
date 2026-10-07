@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js",
+    "start": "node local-server.js",
     "seed": "node scripts/seed.js",
     "test": "node test/run.js"
   },
