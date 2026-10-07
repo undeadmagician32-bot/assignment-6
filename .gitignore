@@ -1,4 +1,6 @@
-data/*.db*
+data/pglite/
 node_modules/
 .env
 .env.*
+.vercel
+data/*.db*

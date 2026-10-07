@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pds-'));
-process.env.DB_PATH = path.join(tmp, 't.db');
+process.env.PGLITE_DIR = 'memory://';
 const { server } = await import('../server.js');
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
